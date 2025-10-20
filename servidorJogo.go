@@ -2,6 +2,10 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/rpc"
 	"sync"
 )
 
@@ -9,6 +13,23 @@ type ServidorJogo struct {
 	Jogadores map[string]*Jogador
 	Mutex sync.Mutex
 	Historico map[string]int
+}
+
+func mainServer() {
+    servidor := &ServidorJogo{
+        Jogadores: make(map[string]*Jogador),
+        Historico: make(map[string]int),
+    }
+
+    rpc.Register(servidor)
+
+    listener, err := net.Listen("tcp", ":1234")
+    if err != nil {
+        log.Fatal("Erro ao iniciar servidor:", err)
+    }
+
+    fmt.Println("Servidor RPC rodando na porta 1234...")
+    rpc.Accept(listener)
 }
 
 func (s *ServidorJogo) RegistrarJogador(args *Jogador, reply *bool) error {
