@@ -6,13 +6,15 @@ GO = go
 # Nomes dos executáveis
 SERVIDOR = servidor
 CLIENTE = cliente
+CLIENTE_TEXTO = cliente_texto
+TESTE_RPC = teste_rpc
 JOGO_ORIGINAL = jogo_original
 
 # Flags de compilação
 LDFLAGS = -ldflags "-s -w"
 
 # Regra padrão
-all: servidor cliente
+all: servidor cliente cliente_texto teste_rpc
 
 # Compila o servidor
 servidor:
@@ -21,6 +23,14 @@ servidor:
 # Compila o cliente
 cliente:
 	$(GO) build $(LDFLAGS) -o $(CLIENTE) cliente.go jogo.go personagem.go interface.go tipos.go
+
+# Compila o cliente de texto
+cliente_texto:
+	$(GO) build $(LDFLAGS) -o $(CLIENTE_TEXTO) cliente_texto.go tipos.go
+
+# Compila o teste RPC
+teste_rpc:
+	$(GO) build $(LDFLAGS) -o $(TESTE_RPC) teste_rpc.go tipos.go
 
 # Compila o jogo original (single player)
 jogo_original:
@@ -44,7 +54,7 @@ run_original: jogo_original
 
 # Limpa arquivos compilados
 clean:
-	rm -f $(SERVIDOR) $(CLIENTE) $(JOGO_ORIGINAL)
+	rm -f $(SERVIDOR) $(CLIENTE) $(CLIENTE_TEXTO) $(TESTE_RPC) $(JOGO_ORIGINAL)
 
 # Instala dependências
 deps:
