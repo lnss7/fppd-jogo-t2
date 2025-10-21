@@ -83,3 +83,5 @@ func (s *ServidorJogo) ObterEstado(args *string, reply *EstadoJogo) error {
 	return nil
 }
 
+
+
