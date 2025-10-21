@@ -22,6 +22,3 @@ type Movimento struct {
 type EstadoJogo struct {
 	Estados []Jogador
 }
-
-
-//

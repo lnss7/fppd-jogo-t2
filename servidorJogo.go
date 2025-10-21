@@ -15,7 +15,7 @@ type ServidorJogo struct {
 	Historico map[string]int
 }
 
-func mainServer() {
+func main() {
     servidor := &ServidorJogo{
         Jogadores: make(map[string]*Jogador),
         Historico: make(map[string]int),
@@ -72,14 +72,18 @@ func (s *ServidorJogo) ObterEstado(args *string, reply *EstadoJogo) error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
-	for _, jogador := range s.Jogadores {
-		estado := EstadoJogo{
-			Nome: jogador.Nome,
-			X:    jogador.X,
-			Y:    jogador.Y,
-		}
-		reply.Estados = append(reply.Estados, estado)
+	if reply == nil {
+		return errors.New("reply is nil")
 	}
+
+	if reply.Estados == nil {
+		reply.Estados = make([]Jogador, 0, len(s.Jogadores))
+	}
+
+	for _, jogador := range s.Jogadores {
+		reply.Estados = append(reply.Estados, *jogador)
+	}
+
 	return nil
 }
 
