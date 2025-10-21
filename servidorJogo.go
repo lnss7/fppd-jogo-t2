@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/rpc"
 	"sync"
+	"time"
 )
 
 type ServidorJogo struct {
@@ -23,6 +24,14 @@ func main() {
 
     rpc.Register(servidor)
 
+	// goroutine que imprime periodicamente o estado do servidor
+	go func() {
+		for {
+			servidor.PrintEstado()
+			time.Sleep(5 * time.Second)
+		}
+	}()
+
     listener, err := net.Listen("tcp", ":1234")
     if err != nil {
         log.Fatal("Erro ao iniciar servidor:", err)
@@ -36,6 +45,11 @@ func (s *ServidorJogo) RegistrarJogador(args *Jogador, reply *bool) error {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	s.Jogadores[args.Nome] = args
+	if reply != nil {
+		*reply = true
+	}
+	fmt.Printf("Jogador registrado: %s (%d,%d)\n", args.Nome, args.X, args.Y)
+	s.PrintEstado()
 	return nil
 }
 
@@ -65,7 +79,29 @@ func (s *ServidorJogo) AtualizarPosicao(args *Movimento, reply *bool) error {
 	}
 	jogador.X = args.X
 	jogador.Y = args.Y
+	if reply != nil {
+		*reply = true
+	}
+	fmt.Printf("Posição atualizada: %s -> (%d,%d)\n", args.Nome, args.X, args.Y)
+	s.PrintEstado()
 	return nil
+}
+
+// PrintEstado escreve no stdout o estado atual dos jogadores registrados.
+func (s *ServidorJogo) PrintEstado() {
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+
+	fmt.Println("---- Estado do Servidor: jogadores registrados ----")
+	if len(s.Jogadores) == 0 {
+		fmt.Println("nenhum jogador conectado")
+		fmt.Println("--------------------------------------------------")
+		return
+	}
+	for _, j := range s.Jogadores {
+		fmt.Printf("Nome: %s, X: %d, Y: %d\n", j.Nome, j.X, j.Y)
+	}
+	fmt.Println("--------------------------------------------------")
 }
 
 func (s *ServidorJogo) ObterEstado(args *string, reply *EstadoJogo) error {

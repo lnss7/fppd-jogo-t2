@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/rpc"
 	"os"
+	"log"
 )
 
 func main() {
@@ -29,14 +30,16 @@ func main() {
 		panic ("Erro ao conectar no servidor: " + err.Error())
 	}
 
-	var nome string 
-	fmt.Print("Digite seu nome:")
+	interfaceFinalizar()
+	var nome string
+	fmt.Print("Digite seu nome: ")
 	fmt.Scanln(&nome)
-
+	interfaceIniciar()
 	jogador := Jogador{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
 	var ok bool 
-	cliente.Call("Servidor.Jogo.RegistrarJogador", jogador, &ok)
-
+    if err := cliente.Call("ServidorJogo.RegistrarJogador", &jogador, &ok); err != nil {
+        log.Fatal("Erro ao registrar jogador:", err)
+    }
 	// Desenha o estado inicial do jogo
 	interfaceDesenharJogo(&jogo)
 
