@@ -43,12 +43,12 @@ func main() {
 
 func (s *ServidorJogo) RegistrarJogador(args *Jogador, reply *bool) error {
 	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
 	s.Jogadores[args.Nome] = args
 	if reply != nil {
 		*reply = true
 	}
 	fmt.Printf("Jogador registrado: %s (%d,%d)\n", args.Nome, args.X, args.Y)
+	s.Mutex.Unlock()
 	s.PrintEstado()
 	return nil
 }
@@ -71,7 +71,6 @@ func (s *ServidorJogo) EnviarMensagem(args *Mensagem, reply *bool) error {
 
 func (s *ServidorJogo) AtualizarPosicao(args *Movimento, reply *bool) error {
 	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
 
 	jogador, ok := s.Jogadores[args.Nome]
 	if !ok {
@@ -83,6 +82,7 @@ func (s *ServidorJogo) AtualizarPosicao(args *Movimento, reply *bool) error {
 		*reply = true
 	}
 	fmt.Printf("Posição atualizada: %s -> (%d,%d)\n", args.Nome, args.X, args.Y)
+	s.Mutex.Unlock()
 	s.PrintEstado()
 	return nil
 }

@@ -3,9 +3,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/rpc"
 	"os"
-	"log"
+	"time"
 )
 
 func main() {
@@ -27,7 +28,7 @@ func main() {
 
 	cliente, err := rpc.Dial("tcp", "localhost:1234")
 	if err != nil {
-		panic ("Erro ao conectar no servidor: " + err.Error())
+		panic("Erro ao conectar no servidor: " + err.Error())
 	}
 
 	interfaceFinalizar()
@@ -36,10 +37,10 @@ func main() {
 	fmt.Scanln(&nome)
 	interfaceIniciar()
 	jogador := Jogador{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
-	var ok bool 
-    if err := cliente.Call("ServidorJogo.RegistrarJogador", &jogador, &ok); err != nil {
-        log.Fatal("Erro ao registrar jogador:", err)
-    }
+	var ok bool
+	if err := cliente.Call("ServidorJogo.RegistrarJogador", &jogador, &ok); err != nil {
+		log.Fatal("Erro ao registrar jogador:", err)
+	}
 	// Desenha o estado inicial do jogo
 	interfaceDesenharJogo(&jogo)
 
@@ -50,19 +51,23 @@ func main() {
 			break
 		}
 
+		// envia a nova posição para o servidor sempre que houver movimento
+		var ok bool
+		mov := Movimento{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
+		if err := cliente.Call("ServidorJogo.AtualizarPosicao", &mov, &ok); err != nil {
+			log.Println("Erro ao atualizar posicao:", err)
+		}
+
 		var estado EstadoJogo
-		cliente.Call("ServidorJogo.ObterEstado", &nome, &estado)
+		if err := cliente.Call("ServidorJogo.ObterEstado", &nome, &estado); err != nil {
+			log.Println("Erro ao obter estado:", err)
+		}
 
 		for _, j := range estado.Estados {
 			if j.Nome != nome {
 				jogo.Mapa[j.Y][j.X] = Personagem
 			}
 		}
-
-		fmt.Println("todos os players:")
-		for _, u := range estado.Estados {
-        fmt.Printf("Nome: %d, X: %s, Y: %s\n", u.Nome, u.X, u.Y)
-    }
 		interfaceDesenharJogo(&jogo)
 	}
 }
