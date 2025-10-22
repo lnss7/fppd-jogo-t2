@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -44,6 +45,45 @@ func main() {
 	// Desenha o estado inicial do jogo
 	interfaceDesenharJogo(&jogo)
 
+	// mutex para proteger acesso concorrente ao jogo entre polling e loop principal
+	var mu2 sync.Mutex
+
+	// goroutine de polling: obtém estado do servidor a cada 300ms
+	go func() {
+		ticker := time.NewTicker(300 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			var estado EstadoJogo
+			if err := cliente.Call("ServidorJogo.ObterEstado", &nome, &estado); err != nil {
+				// se houver erro, apenas log e segue
+				log.Println("Erro ao obter estado (poll):", err)
+				continue
+			}
+
+			// atualiza mapa: remove personagens antigos (exceto o próprio) e coloca os atuais
+			mu2.Lock()
+			for y := range jogo.Mapa {
+				for x := range jogo.Mapa[y] {
+					if jogo.Mapa[y][x] == Personagem {
+						if !(x == jogo.PosX && y == jogo.PosY) {
+							jogo.Mapa[y][x] = Vazio
+						}
+					}
+				}
+			}
+			for _, j := range estado.Estados {
+				if j.Nome == nome {
+					continue
+				}
+				if j.Y >= 0 && j.Y < len(jogo.Mapa) && j.X >= 0 && j.X < len(jogo.Mapa[j.Y]) {
+					jogo.Mapa[j.Y][j.X] = Personagem
+				}
+			}
+			interfaceDesenharJogo(&jogo)
+			mu2.Unlock()
+		}
+	}()
+
 	// Loop principal de entrada
 	for {
 		evento := interfaceLerEventoTeclado()
@@ -68,6 +108,14 @@ func main() {
 				jogo.Mapa[j.Y][j.X] = Personagem
 			}
 		}
-		interfaceDesenharJogo(&jogo)
+        // opcional: redesenhar (polling também redesenha)
+        mu2.Lock()
+        interfaceDesenharJogo(&jogo)
+        mu2.Unlock()	
+	}
+	// ao sair, avisa o servidor para remover o jogador
+	var removed bool
+	if err := cliente.Call("ServidorJogo.RemoverJogador", &nome, &removed); err != nil {
+		log.Println("Erro ao remover jogador no servidor:", err)
 	}
 }

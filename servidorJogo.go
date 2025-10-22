@@ -44,6 +44,10 @@ func main() {
 func (s *ServidorJogo) RegistrarJogador(args *Jogador, reply *bool) error {
 	s.Mutex.Lock()
 	s.Jogadores[args.Nome] = args
+
+	// registra timestamp de último contato
+    s.Historico[args.Nome] = int(time.Now().Unix())
+
 	if reply != nil {
 		*reply = true
 	}
@@ -74,10 +78,15 @@ func (s *ServidorJogo) AtualizarPosicao(args *Movimento, reply *bool) error {
 
 	jogador, ok := s.Jogadores[args.Nome]
 	if !ok {
+		s.Mutex.Unlock() // desbloquia antes pra nao dar deadlock
 		return errors.New("Jogador não encontrado")
 	}
 	jogador.X = args.X
 	jogador.Y = args.Y
+
+    // atualiza timestamp de último contato
+    s.Historico[args.Nome] = int(time.Now().Unix())
+
 	if reply != nil {
 		*reply = true
 	}
@@ -87,12 +96,34 @@ func (s *ServidorJogo) AtualizarPosicao(args *Movimento, reply *bool) error {
 	return nil
 }
 
-// PrintEstado escreve no stdout o estado atual dos jogadores registrados.
+func (s *ServidorJogo) RemoverJogador(args *string, reply *bool) error {
+    s.Mutex.Lock() 
+
+    if _, ok := s.Jogadores[*args]; ok {
+        delete(s.Jogadores, *args)
+        delete(s.Historico, *args)
+        if reply != nil {
+            *reply = true
+        }
+        fmt.Printf("Jogador removido: %s\n", *args)
+		s.Mutex.Unlock()
+        s.PrintEstado()
+        return nil
+    }
+
+	s.Mutex.Unlock()
+    if reply != nil {
+        *reply = false
+    }
+    return errors.New("Jogador não encontrado")
+}
+
+// PrintEstado escreve o estado atual dos jogadores registrados.
 func (s *ServidorJogo) PrintEstado() {
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
-	fmt.Println("---- Estado do Servidor: jogadores registrados ----")
+	fmt.Println("Estado do Servidor: jogadores registrados")
 	if len(s.Jogadores) == 0 {
 		fmt.Println("nenhum jogador conectado")
 		fmt.Println("--------------------------------------------------")
