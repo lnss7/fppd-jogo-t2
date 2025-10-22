@@ -63,7 +63,7 @@ func (s *ServidorJogo) EnviarMensagem(args *Mensagem, reply *bool) error {
 
 	for _, jogador := range s.Jogadores {
 		if jogador.Nome != args.Remetente {
-			// TODO: enviar a mensagem ao jogador
+			// TODO: enviar a mnsagem ao jogador
 		}
 	}
 

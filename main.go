@@ -27,10 +27,33 @@ func main() {
 		panic(err)
 	}
 
-	cliente, err := rpc.Dial("tcp", "localhost:1234")
-	if err != nil {
-		panic("Erro ao conectar no servidor: " + err.Error())
-	}
+	clienteAddr := "localhost:1234"
+    // se passado como 2º argumento (ex: mapa.txt 192.168.1.10:1234)
+    if len(os.Args) > 2 {
+        clienteAddr = os.Args[2]
+    }
+
+    // loga os argumentos e o endereço a ser usado (ajuda debugging)
+    log.Printf("os.Args = %v", os.Args)
+    log.Printf("Endereço do servidor: %s", clienteAddr)
+
+    // tenta conectar com retry antes de falhar
+    var cliente *rpc.Client
+    var err error
+    maxTentativas := 5
+    delay := 500 * time.Millisecond
+    for i := 0; i < maxTentativas; i++ {
+        cliente, err = rpc.Dial("tcp", clienteAddr)
+        if err == nil {
+            break
+        }
+        log.Printf("Falha ao conectar (%d/%d) em %s: %v", i+1, maxTentativas, clienteAddr, err)
+        time.Sleep(delay)
+        delay *= 2
+    }
+    if err != nil {
+        log.Fatalf("Não foi possível conectar no servidor %s: %v", clienteAddr, err)
+    }
 
 	interfaceFinalizar()
 	var nome string
