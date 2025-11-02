@@ -22,3 +22,19 @@ type Movimento struct {
 type EstadoJogo struct {
 	Estados []Jogador
 }
+
+// adicionado: wrappers de comando com sequence number
+type CmdJogador struct {
+    Seq     int
+    Jogador Jogador
+}
+
+type CmdMovimento struct {
+    Seq      int
+    Movimento Movimento
+}
+
+type CmdRemover struct {
+    Seq  int
+    Nome string
+}

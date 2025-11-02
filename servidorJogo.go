@@ -1,26 +1,39 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"log"
-	"net"
-	"net/rpc"
-	"sync"
-	"time"
+    "encoding/gob"
+    "errors"
+    "fmt"
+    "log"
+    "net"
+    "net/rpc"
+    "sync"
+    "time"
 )
 
 type ServidorJogo struct {
 	Jogadores map[string]*Jogador
 	Mutex sync.Mutex
 	Historico map[string]int
+
+	// adicionado: comandos já processados por jogador (seq -> true)
+    Processed map[string]map[int]bool
 }
 
 func main() {
     servidor := &ServidorJogo{
         Jogadores: make(map[string]*Jogador),
         Historico: make(map[string]int),
+		Processed: make(map[string]map[int]bool),
     }
+
+    // registra tipos usados nas chamadas RPC para evitar incompatibilidades gob
+    gob.Register(Jogador{})
+    gob.Register(Movimento{})
+    gob.Register(CmdJogador{})
+    gob.Register(CmdMovimento{})
+    gob.Register(CmdRemover{})
+    gob.Register(EstadoJogo{})
 
     rpc.Register(servidor)
 
@@ -41,20 +54,35 @@ func main() {
     rpc.Accept(listener)
 }
 
-func (s *ServidorJogo) RegistrarJogador(args *Jogador, reply *bool) error {
-	s.Mutex.Lock()
-	s.Jogadores[args.Nome] = args
+func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
+    s.Mutex.Lock()
 
-	// registra timestamp de último contato
-    s.Historico[args.Nome] = int(time.Now().Unix())
+    nome := args.Jogador.Nome
+    if s.Processed[nome] == nil {
+        s.Processed[nome] = make(map[int]bool)
+    }
+    if s.Processed[nome][args.Seq] {
+        if reply != nil {
+            *reply = true
+        }
+        // já processado -> idempotente
+		s.Mutex.Unlock()
+        return nil
+    }
 
-	if reply != nil {
-		*reply = true
-	}
-	fmt.Printf("Jogador registrado: %s (%d,%d)\n", args.Nome, args.X, args.Y)
-	s.Mutex.Unlock()
-	s.PrintEstado()
-	return nil
+    // processa comando
+    s.Jogadores[nome] = &args.Jogador
+    s.Historico[nome] = int(time.Now().Unix())
+    s.Processed[nome][args.Seq] = true
+
+    if reply != nil {
+        *reply = true
+    }
+    fmt.Printf("Jogador registrado: %s (%d,%d)\n", args.Jogador.Nome, args.Jogador.X, args.Jogador.Y)
+    // unlock antes de PrintEstado
+    s.Mutex.Unlock()
+    s.PrintEstado()
+    return nil
 }
 
 func (s *ServidorJogo) EnviarMensagem(args *Mensagem, reply *bool) error {
@@ -73,45 +101,68 @@ func (s *ServidorJogo) EnviarMensagem(args *Mensagem, reply *bool) error {
 	return nil
 }
 
-func (s *ServidorJogo) AtualizarPosicao(args *Movimento, reply *bool) error {
-	s.Mutex.Lock()
+func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
+    s.Mutex.Lock()
 
-	jogador, ok := s.Jogadores[args.Nome]
-	if !ok {
-		s.Mutex.Unlock() // desbloquia antes pra nao dar deadlock
-		return errors.New("Jogador não encontrado")
-	}
-	jogador.X = args.X
-	jogador.Y = args.Y
-
-    // atualiza timestamp de último contato
-    s.Historico[args.Nome] = int(time.Now().Unix())
-
-	if reply != nil {
-		*reply = true
-	}
-	fmt.Printf("Posição atualizada: %s -> (%d,%d)\n", args.Nome, args.X, args.Y)
-	s.Mutex.Unlock()
-	s.PrintEstado()
-	return nil
-}
-
-func (s *ServidorJogo) RemoverJogador(args *string, reply *bool) error {
-    s.Mutex.Lock() 
-
-    if _, ok := s.Jogadores[*args]; ok {
-        delete(s.Jogadores, *args)
-        delete(s.Historico, *args)
+    nome := args.Movimento.Nome
+    if s.Processed[nome] == nil {
+        s.Processed[nome] = make(map[int]bool)
+    }
+    if s.Processed[nome][args.Seq] {
+        s.Mutex.Unlock()
         if reply != nil {
             *reply = true
         }
-        fmt.Printf("Jogador removido: %s\n", *args)
-		s.Mutex.Unlock()
+        return nil
+    }
+
+    jogador, ok := s.Jogadores[nome]
+    if !ok {
+        s.Mutex.Unlock()
+        return errors.New("Jogador não encontrado")
+    }
+    jogador.X = args.Movimento.X
+    jogador.Y = args.Movimento.Y
+    s.Historico[nome] = int(time.Now().Unix())
+    s.Processed[nome][args.Seq] = true
+
+    if reply != nil {
+        *reply = true
+    }
+    fmt.Printf("Posição atualizada: %s -> (%d,%d)\n", nome, args.Movimento.X, args.Movimento.Y)
+    s.Mutex.Unlock()
+    s.PrintEstado()
+    return nil
+}
+func (s *ServidorJogo) RemoverJogador(args *CmdRemover, reply *bool) error {
+    s.Mutex.Lock()
+
+    nome := args.Nome
+    if s.Processed[nome] == nil {
+        s.Processed[nome] = make(map[int]bool)
+    }
+    if s.Processed[nome][args.Seq] {
+        s.Mutex.Unlock()
+        if reply != nil {
+            *reply = true
+        }
+        return nil
+    }
+
+    if _, ok := s.Jogadores[nome]; ok {
+        delete(s.Jogadores, nome)
+        delete(s.Historico, nome)
+        s.Processed[nome][args.Seq] = true
+        if reply != nil {
+            *reply = true
+        }
+        fmt.Printf("Jogador removido: %s\n", nome)
+        s.Mutex.Unlock()
         s.PrintEstado()
         return nil
     }
 
-	s.Mutex.Unlock()
+    s.Mutex.Unlock()
     if reply != nil {
         *reply = false
     }

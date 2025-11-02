@@ -28,33 +28,50 @@ func main() {
 	}
 
 	clienteAddr := "localhost:1234"
-    // se passado como 2º argumento (ex: mapa.txt 192.168.1.10:1234)
-    if len(os.Args) > 2 {
-        clienteAddr = os.Args[2]
-    }
+	if len(os.Args) > 2 {
+		clienteAddr = os.Args[2]
+	}
+	log.Printf("os.Args = %v", os.Args)
+	log.Printf("Endereço do servidor: %s", clienteAddr)
 
-    // loga os argumentos e o endereço a ser usado (ajuda debugging)
-    log.Printf("os.Args = %v", os.Args)
-    log.Printf("Endereço do servidor: %s", clienteAddr)
+	var cliente *rpc.Client
+	var clientMu sync.Mutex
 
-    // tenta conectar com retry antes de falhar
-    var cliente *rpc.Client
-    var err error
-    maxTentativas := 5
-    delay := 500 * time.Millisecond
-    for i := 0; i < maxTentativas; i++ {
-        cliente, err = rpc.Dial("tcp", clienteAddr)
-        if err == nil {
-            break
-        }
-        log.Printf("Falha ao conectar (%d/%d) em %s: %v", i+1, maxTentativas, clienteAddr, err)
-        time.Sleep(delay)
-        delay *= 2
-    }
-    if err != nil {
-        log.Fatalf("Não foi possível conectar no servidor %s: %v", clienteAddr, err)
-    }
+	// helper local que faz call com retry + reconexão automática
+	callRPC := func(method string, args interface{}, reply interface{}) error {
+		max := 5
+		delay := 200 * time.Millisecond
+		for i := 0; i < max; i++ {
+			clientMu.Lock()
+			if cliente == nil {
+				c, err := rpc.Dial("tcp", clienteAddr)
+				if err != nil {
+					clientMu.Unlock()
+					time.Sleep(delay)
+					delay *= 2
+					continue
+				}
+				cliente = c
+			}
+			err := cliente.Call(method, args, reply)
+			if err == nil {
+				clientMu.Unlock()
+				return nil
+			}
+			// em caso de erro, fecha o client para forçar reconnect na próxima tentativa
+			cliente.Close()
+			cliente = nil
+			clientMu.Unlock()
+			time.Sleep(delay)
+			delay *= 2
+		}
+		return fmt.Errorf("chamada RPC %s falhou após retries", method)
+	}
 
+	// seq local para garantir exactly-once (incrementa a cada comando)
+	seq := 1
+
+	// registrar jogador usando CmdJogador com retry
 	interfaceFinalizar()
 	var nome string
 	fmt.Print("Digite seu nome: ")
@@ -62,11 +79,10 @@ func main() {
 	interfaceIniciar()
 	jogador := Jogador{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
 	var ok bool
-	if err := cliente.Call("ServidorJogo.RegistrarJogador", &jogador, &ok); err != nil {
+	if err := callRPC("ServidorJogo.RegistrarJogador", &CmdJogador{Seq: seq, Jogador: jogador}, &ok); err != nil {
 		log.Fatal("Erro ao registrar jogador:", err)
 	}
-	// Desenha o estado inicial do jogo
-	interfaceDesenharJogo(&jogo)
+	seq++
 
 	// mutex para proteger acesso concorrente ao jogo entre polling e loop principal
 	var mu2 sync.Mutex
@@ -77,7 +93,7 @@ func main() {
 		defer ticker.Stop()
 		for range ticker.C {
 			var estado EstadoJogo
-			if err := cliente.Call("ServidorJogo.ObterEstado", &nome, &estado); err != nil {
+			if err := callRPC("ServidorJogo.ObterEstado", &nome, &estado); err != nil {
 				// se houver erro, apenas log e segue
 				log.Println("Erro ao obter estado (poll):", err)
 				continue
@@ -117,12 +133,14 @@ func main() {
 		// envia a nova posição para o servidor sempre que houver movimento
 		var ok bool
 		mov := Movimento{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
-		if err := cliente.Call("ServidorJogo.AtualizarPosicao", &mov, &ok); err != nil {
+		if err := callRPC("ServidorJogo.AtualizarPosicao", &CmdMovimento{Seq: seq, Movimento: mov}, &ok); err != nil {
 			log.Println("Erro ao atualizar posicao:", err)
+		} else {
+			seq++
 		}
 
 		var estado EstadoJogo
-		if err := cliente.Call("ServidorJogo.ObterEstado", &nome, &estado); err != nil {
+		if err := callRPC("ServidorJogo.ObterEstado", &nome, &estado); err != nil {
 			log.Println("Erro ao obter estado:", err)
 		}
 
@@ -131,14 +149,16 @@ func main() {
 				jogo.Mapa[j.Y][j.X] = Personagem
 			}
 		}
-        // opcional: redesenhar (polling também redesenha)
-        mu2.Lock()
-        interfaceDesenharJogo(&jogo)
-        mu2.Unlock()	
+		// opcional: redesenhar (polling também redesenha)
+		mu2.Lock()
+		interfaceDesenharJogo(&jogo)
+		mu2.Unlock()
 	}
 	// ao sair, avisa o servidor para remover o jogador
 	var removed bool
-	if err := cliente.Call("ServidorJogo.RemoverJogador", &nome, &removed); err != nil {
+	if err := callRPC("ServidorJogo.RemoverJogador", &CmdRemover{Seq: seq, Nome: nome}, &removed); err != nil {
 		log.Println("Erro ao remover jogador no servidor:", err)
+	} else {
+		seq++
 	}
 }
