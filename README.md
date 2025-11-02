@@ -63,3 +63,14 @@ Também é possivel compilar o projeto usando o comando `make` no Linux ou o scr
 - personagem.go — Ações do jogador
 
 
+Servidor
+
+go build -o servidor.exe .\servidorJogo.go .\tipos.go
+.\servidor.exe
+
+Se necessário, abra a porta no firewall (Admin):
+netsh advfirewall firewall add rule name="JogoTCP1234" dir=in action=allow protocol=TCP localport=1234
+
+Cliente
+go build -o jogo.exe .\interface.go .\jogo.go .\main.go .\personagem.go .\tipos.go
+.\jogo.exe mapa.txt 192.168.0.8:1234
