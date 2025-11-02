@@ -149,7 +149,6 @@ func main() {
 				jogo.Mapa[j.Y][j.X] = Personagem
 			}
 		}
-		// opcional: redesenhar (polling também redesenha)
 		mu2.Lock()
 		interfaceDesenharJogo(&jogo)
 		mu2.Unlock()

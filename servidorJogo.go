@@ -1,7 +1,6 @@
 package main
 
 import (
-    "encoding/gob"
     "errors"
     "fmt"
     "log"
@@ -26,14 +25,6 @@ func main() {
         Historico: make(map[string]int),
 		Processed: make(map[string]map[int]bool),
     }
-
-    // registra tipos usados nas chamadas RPC para evitar incompatibilidades gob
-    gob.Register(Jogador{})
-    gob.Register(Movimento{})
-    gob.Register(CmdJogador{})
-    gob.Register(CmdMovimento{})
-    gob.Register(CmdRemover{})
-    gob.Register(EstadoJogo{})
 
     rpc.Register(servidor)
 
@@ -152,6 +143,7 @@ func (s *ServidorJogo) RemoverJogador(args *CmdRemover, reply *bool) error {
     if _, ok := s.Jogadores[nome]; ok {
         delete(s.Jogadores, nome)
         delete(s.Historico, nome)
+        delete(s.Processed, nome)
         s.Processed[nome][args.Seq] = true
         if reply != nil {
             *reply = true
