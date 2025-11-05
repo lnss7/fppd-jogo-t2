@@ -13,8 +13,6 @@ import (
 type ServidorJogo struct {
 	Jogadores map[string]*Jogador
 	Mutex     sync.Mutex
-	Historico map[string]int
-
 	// adicionado: comandos já processados por jogador (seq -> true)
 	Processed map[string]map[int]bool
 }
@@ -22,7 +20,6 @@ type ServidorJogo struct {
 func main() {
 	servidor := &ServidorJogo{
 		Jogadores: make(map[string]*Jogador),
-		Historico: make(map[string]int),
 		Processed: make(map[string]map[int]bool),
 	}
 
@@ -67,7 +64,6 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 
 	// processa comando
 	s.Jogadores[nome] = &args.Jogador
-	s.Historico[nome] = int(time.Now().Unix())
 	s.Processed[nome][args.Seq] = true
 
 	if reply != nil {
@@ -77,22 +73,6 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 	// unlock antes de PrintEstado
 	s.Mutex.Unlock()
 	s.PrintEstado()
-	return nil
-}
-
-func (s *ServidorJogo) EnviarMensagem(args *Mensagem, reply *bool) error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-
-	for _, jogador := range s.Jogadores {
-		if jogador.Nome != args.Remetente {
-			// TODO: enviar a mnsagem ao jogador
-		}
-	}
-
-	if reply != nil {
-		*reply = true
-	}
 	return nil
 }
 
@@ -122,7 +102,6 @@ func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
 	}
 	jogador.X = args.Movimento.X
 	jogador.Y = args.Movimento.Y
-	s.Historico[nome] = int(time.Now().Unix())
 	s.Processed[nome][args.Seq] = true
 
 	if reply != nil {
@@ -153,9 +132,8 @@ func (s *ServidorJogo) RemoverJogador(args *CmdRemover, reply *bool) error {
 	}
 
 	if _, ok := s.Jogadores[nome]; ok {
-		delete(s.Jogadores, nome)
-		delete(s.Historico, nome)
-		delete(s.Processed, nome)
+	delete(s.Jogadores, nome)
+	delete(s.Processed, nome)
 		if reply != nil {
 			*reply = true
 		}

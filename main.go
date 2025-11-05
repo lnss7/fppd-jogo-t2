@@ -89,7 +89,7 @@ func main() {
 
 	// goroutine de polling: obtém estado do servidor a cada 300ms
 	go func() {
-		ticker := time.NewTicker(300 * time.Millisecond)
+		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
 		for range ticker.C {
 			var estado EstadoJogo
