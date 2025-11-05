@@ -80,22 +80,6 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 	return nil
 }
 
-func (s *ServidorJogo) EnviarMensagem(args *Mensagem, reply *bool) error {
-	s.Mutex.Lock()
-	defer s.Mutex.Unlock()
-
-	for _, jogador := range s.Jogadores {
-		if jogador.Nome != args.Remetente {
-			// TODO: enviar a mnsagem ao jogador
-		}
-	}
-
-	if reply != nil {
-		*reply = true
-	}
-	return nil
-}
-
 func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
 	s.Mutex.Lock()
 
