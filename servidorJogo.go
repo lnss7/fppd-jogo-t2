@@ -13,7 +13,7 @@ import (
 type ServidorJogo struct {
 	Jogadores map[string]*Jogador
 	Mutex     sync.Mutex
-	// adicionado: comandos já processados por jogador (seq -> true)
+	// adicionado: comandos já processados por jogador (sequenceNumber -> true)
 	Processed map[string]map[int]bool
 }
 
@@ -53,7 +53,7 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 	if s.Processed[nome] == nil {
 		s.Processed[nome] = make(map[int]bool)
 	}
-	if s.Processed[nome][args.Seq] {
+	if s.Processed[nome][args.SequenceNumber] {
 		if reply != nil {
 			*reply = true
 		}
@@ -64,7 +64,7 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 
 	// processa comando
 	s.Jogadores[nome] = &args.Jogador
-	s.Processed[nome][args.Seq] = true
+	s.Processed[nome][args.SequenceNumber] = true
 
 	if reply != nil {
 		*reply = true
@@ -73,10 +73,16 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 	// unlock antes de PrintEstado
 	s.Mutex.Unlock()
 	s.PrintEstado()
+	if reply != nil {
+		log.Printf("Resposta RegistrarJogador: nome=%s reply=%v", args.Jogador.Nome, *reply)
+	} else {
+		log.Printf("Resposta RegistrarJogador: nome=%s reply=nil", args.Jogador.Nome)
+	}
 	return nil
 }
 
 func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
+	log.Printf("Recebido AtualizarPosicao: %+v", args)
 	s.Mutex.Lock()
 
 	if s.Processed == nil {
@@ -87,7 +93,7 @@ func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
 	if s.Processed[nome] == nil {
 		s.Processed[nome] = make(map[int]bool)
 	}
-	if s.Processed[nome][args.Seq] {
+	if s.Processed[nome][args.SequenceNumber] {
 		s.Mutex.Unlock()
 		if reply != nil {
 			*reply = true
@@ -102,7 +108,7 @@ func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
 	}
 	jogador.X = args.Movimento.X
 	jogador.Y = args.Movimento.Y
-	s.Processed[nome][args.Seq] = true
+	s.Processed[nome][args.SequenceNumber] = true
 
 	if reply != nil {
 		*reply = true
@@ -110,9 +116,11 @@ func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
 	fmt.Printf("Posição atualizada: %s -> (%d,%d)\n", nome, args.Movimento.X, args.Movimento.Y)
 	s.Mutex.Unlock()
 	s.PrintEstado()
+	log.Printf("Resposta AtualizarPosicao: %v", *reply)
 	return nil
 }
 func (s *ServidorJogo) RemoverJogador(args *CmdRemover, reply *bool) error {
+	log.Printf("Recebido RemoverJogador: %+v", args)
 	s.Mutex.Lock()
 
 	if s.Processed == nil {
@@ -123,7 +131,7 @@ func (s *ServidorJogo) RemoverJogador(args *CmdRemover, reply *bool) error {
 	if s.Processed[nome] == nil {
 		s.Processed[nome] = make(map[int]bool)
 	}
-	if s.Processed[nome][args.Seq] {
+	if s.Processed[nome][args.SequenceNumber] {
 		s.Mutex.Unlock()
 		if reply != nil {
 			*reply = true
@@ -132,8 +140,8 @@ func (s *ServidorJogo) RemoverJogador(args *CmdRemover, reply *bool) error {
 	}
 
 	if _, ok := s.Jogadores[nome]; ok {
-	delete(s.Jogadores, nome)
-	delete(s.Processed, nome)
+		delete(s.Jogadores, nome)
+		delete(s.Processed, nome)
 		if reply != nil {
 			*reply = true
 		}
@@ -168,6 +176,11 @@ func (s *ServidorJogo) PrintEstado() {
 }
 
 func (s *ServidorJogo) ObterEstado(args *string, reply *EstadoJogo) error {
+//	if args != nil {
+//		log.Printf("Recebido ObterEstado (requestor): %s", *args)
+//	} else {
+//		log.Printf("Recebido ObterEstado (requestor): <nil>")
+//	}
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 
@@ -182,6 +195,7 @@ func (s *ServidorJogo) ObterEstado(args *string, reply *EstadoJogo) error {
 	for _, jogador := range s.Jogadores {
 		reply.Estados = append(reply.Estados, *jogador)
 	}
+//	log.Printf("Resposta ObterEstado: %d jogadores", len(reply.Estados))
 
 	return nil
 }

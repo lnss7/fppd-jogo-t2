@@ -39,14 +39,16 @@ func main() {
 
 	// helper local que faz call com retry + reconexão automática
 	callRPC := func(method string, args interface{}, reply interface{}) error {
-		max := 5
 		delay := 200 * time.Millisecond
-		for i := 0; i < max; i++ {
+		var lastErr error
+		for i := 0; i < 5; i++ {
 			clientMu.Lock()
 			if cliente == nil {
 				c, err := rpc.Dial("tcp", clienteAddr)
 				if err != nil {
 					clientMu.Unlock()
+					log.Printf("callRPC %s dial attempt %d failed: %v", method, i+1, err)
+					lastErr = err
 					time.Sleep(delay)
 					delay *= 2
 					continue
@@ -59,17 +61,19 @@ func main() {
 				return nil
 			}
 			// em caso de erro, fecha o client para forçar reconnect na próxima tentativa
+			log.Printf("callRPC %s call attempt %d failed: %v", method, i+1, err)
+			lastErr = err
 			cliente.Close()
 			cliente = nil
 			clientMu.Unlock()
 			time.Sleep(delay)
 			delay *= 2
 		}
-		return fmt.Errorf("chamada RPC %s falhou após retries", method)
+		return fmt.Errorf("chamada RPC %s falhou após retries: %v", method, lastErr)
 	}
 
-	// seq local para garantir exactly-once (incrementa a cada comando)
-	seq := 1
+	// sequenceNumber local para garantir exactly-once (incrementa a cada comando)
+	sequenceNumber := 1
 
 	// registrar jogador usando CmdJogador com retry
 	interfaceFinalizar()
@@ -79,10 +83,10 @@ func main() {
 	interfaceIniciar()
 	jogador := Jogador{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
 	var ok bool
-	if err := callRPC("ServidorJogo.RegistrarJogador", &CmdJogador{Seq: seq, Jogador: jogador}, &ok); err != nil {
+	if err := callRPC("ServidorJogo.RegistrarJogador", &CmdJogador{SequenceNumber: sequenceNumber, Jogador: jogador}, &ok); err != nil {
 		log.Fatal("Erro ao registrar jogador:", err)
 	}
-	seq++
+	sequenceNumber++
 
 	// mutex para proteger acesso concorrente ao jogo entre polling e loop principal
 	var mu2 sync.Mutex
@@ -133,10 +137,10 @@ func main() {
 		// envia a nova posição para o servidor sempre que houver movimento
 		var ok bool
 		mov := Movimento{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
-		if err := callRPC("ServidorJogo.AtualizarPosicao", &CmdMovimento{Seq: seq, Movimento: mov}, &ok); err != nil {
+		if err := callRPC("ServidorJogo.AtualizarPosicao", &CmdMovimento{SequenceNumber: sequenceNumber, Movimento: mov}, &ok); err != nil {
 			log.Println("Erro ao atualizar posicao:", err)
 		} else {
-			seq++
+			sequenceNumber++
 		}
 
 		var estado EstadoJogo
@@ -155,9 +159,9 @@ func main() {
 	}
 	// ao sair, avisa o servidor para remover o jogador
 	var removed bool
-	if err := callRPC("ServidorJogo.RemoverJogador", &CmdRemover{Seq: seq, Nome: nome}, &removed); err != nil {
+	if err := callRPC("ServidorJogo.RemoverJogador", &CmdRemover{SequenceNumber: sequenceNumber, Nome: nome}, &removed); err != nil {
 		log.Println("Erro ao remover jogador no servidor:", err)
 	} else {
-		seq++
+		sequenceNumber++
 	}
 }

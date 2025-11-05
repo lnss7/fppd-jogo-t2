@@ -25,16 +25,16 @@ type EstadoJogo struct {
 
 // adicionado: wrappers de comando com sequence number
 type CmdJogador struct {
-    Seq     int
-    Jogador Jogador
+	SequenceNumber int
+	Jogador        Jogador
 }
 
 type CmdMovimento struct {
-    Seq      int
-    Movimento Movimento
+	SequenceNumber int
+	Movimento      Movimento
 }
 
 type CmdRemover struct {
-    Seq  int
-    Nome string
+	SequenceNumber int
+	Nome           string
 }
