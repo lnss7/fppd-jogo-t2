@@ -91,7 +91,7 @@ func main() {
 	// mutex para proteger acesso concorrente ao jogo entre polling e loop principal
 	var mu2 sync.Mutex
 
-	// goroutine de polling: obtém estado do servidor a cada 300ms
+	// goroutine de polling: obtém estado do servidor
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond)
 		defer ticker.Stop()
@@ -133,11 +133,18 @@ func main() {
 		if continuar := personagemExecutarAcao(evento, &jogo); !continuar {
 			break
 		}
-
+		mov := Movimento{
+			Nome: nome,
+			X:	jogo.PosX,
+			Y: jogo.PosY,
+		}
+		cmd := CmdMovimento{
+			SequenceNumber: sequenceNumber,
+			Movimento:      mov,
+		}
 		// envia a nova posição para o servidor sempre que houver movimento
 		var ok bool
-		mov := Movimento{Nome: nome, X: jogo.PosX, Y: jogo.PosY}
-		if err := callRPC("ServidorJogo.AtualizarPosicao", &CmdMovimento{SequenceNumber: sequenceNumber, Movimento: mov}, &ok); err != nil {
+		if err := callRPC("ServidorJogo.AtualizarPosicao", &cmd, &ok); err != nil {
 			log.Println("Erro ao atualizar posicao:", err)
 		} else {
 			sequenceNumber++
@@ -158,8 +165,12 @@ func main() {
 		mu2.Unlock()
 	}
 	// ao sair, avisa o servidor para remover o jogador
+	cmd := CmdRemover{
+		SequenceNumber: sequenceNumber,
+		Nome:           nome,
+	}
 	var removed bool
-	if err := callRPC("ServidorJogo.RemoverJogador", &CmdRemover{SequenceNumber: sequenceNumber, Nome: nome}, &removed); err != nil {
+	if err := callRPC("ServidorJogo.RemoverJogador", &cmd, &removed); err != nil {
 		log.Println("Erro ao remover jogador no servidor:", err)
 	} else {
 		sequenceNumber++

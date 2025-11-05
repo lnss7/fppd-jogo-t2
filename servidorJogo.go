@@ -53,15 +53,16 @@ func (s *ServidorJogo) RegistrarJogador(args *CmdJogador, reply *bool) error {
 	if s.Processed[nome] == nil {
 		s.Processed[nome] = make(map[int]bool)
 	}
+	//verifica se uma requisição já foi processada
 	if s.Processed[nome][args.SequenceNumber] {
 		if reply != nil {
 			*reply = true
 		}
-		// já processado -> idempotente
 		s.Mutex.Unlock()
 		return nil
 	}
 
+	//cai aqui caso nao tenha sido processada
 	// processa comando
 	s.Jogadores[nome] = &args.Jogador
 	s.Processed[nome][args.SequenceNumber] = true
@@ -93,6 +94,8 @@ func (s *ServidorJogo) AtualizarPosicao(args *CmdMovimento, reply *bool) error {
 	if s.Processed[nome] == nil {
 		s.Processed[nome] = make(map[int]bool)
 	}
+	
+	//verifica se uma requisição já foi processada
 	if s.Processed[nome][args.SequenceNumber] {
 		s.Mutex.Unlock()
 		if reply != nil {
