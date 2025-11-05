@@ -74,3 +74,11 @@ netsh advfirewall firewall add rule name="JogoTCP1234" dir=in action=allow proto
 Cliente
 go build -o jogo.exe .\interface.go .\jogo.go .\main.go .\personagem.go .\tipos.go
 .\jogo.exe mapa.txt 192.168.0.8:1234
+
+
+============================ NO MAC ===================================
+
+Cliente:
+- Cmd 01: go build -o jogo main.go jogo.go personagem.go interface.go tipos.go
+- Cmd 02: ./jogo mapa.txt 172.20.10.11:1234
+
